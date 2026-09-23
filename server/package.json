@@ -1,0 +1,17 @@
+{
+  "name": "heritage-travel-agents",
+  "version": "1.0.0",
+  "description": "非遗伴游——基于多智能体的地方文旅-非遗融合导览助手",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "license": "MIT"
+}

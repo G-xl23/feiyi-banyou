@@ -1,0 +1,356 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>非遗伴游 · 非遗活态传承与乡村产业赋能平台</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ======== 左侧纵向导航栏 ======== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">遗</div>
+      <div class="brand-text">
+        <h1>非遗伴游</h1>
+        <p>多智能体 · 非遗活态传承<br />乡村产业赋能平台</p>
+      </div>
+    </div>
+
+    <!-- 身份切换 -->
+    <div class="mode-switch" id="modeSwitch">
+      <button type="button" class="mode-btn active" data-mode="tourist"><span>🧳</span>旅行者</button>
+      <button type="button" class="mode-btn" data-mode="staff"><span>🏛</span>地方工作人员</button>
+    </div>
+
+    <nav class="tabs" id="tabs">
+      <p class="nav-group-title" data-group="tourist">游客服务</p>
+      <button class="tab active" data-tab="chat" data-mode="tourist"><span class="tab-ico">💬</span>智能对话</button>
+      <button class="tab" data-tab="plan" data-mode="tourist"><span class="tab-ico">🧳</span>行程规划</button>
+      <button class="tab" data-tab="guide" data-mode="tourist"><span class="tab-ico">🏛</span>景点·非遗讲解</button>
+      <button class="tab" data-tab="food" data-mode="tourist"><span class="tab-ico">🍜</span>美食民俗</button>
+      <button class="tab" data-tab="kb" data-mode="tourist"><span class="tab-ico">📚</span>非遗知识库</button>
+      <button class="tab" data-tab="aigc" data-mode="tourist"><span class="tab-ico">✨</span>AIGC文创</button>
+
+      <p class="nav-group-title" data-group="staff">政府 · 产业赋能</p>
+      <button class="tab" data-tab="staffchat" data-mode="staff"><span class="tab-ico">🧭</span>智能对话</button>
+      <button class="tab" data-tab="industry" data-mode="staff"><span class="tab-ico">🌾</span>乡村产业赋能</button>
+      <button class="tab" data-tab="insight" data-mode="staff"><span class="tab-ico">📊</span>乡村振兴看板</button>
+
+      <p class="nav-group-title" data-group="common">账号</p>
+      <button class="tab" data-tab="profile" data-mode="common"><span class="tab-ico">👤</span>个人中心</button>
+    </nav>
+
+    <!-- 个人信息速览卡 -->
+    <div class="side-profile" id="sideProfile" title="进入个人中心">
+      <div class="side-avatar" id="sideAvatar">客</div>
+      <div class="side-profile-text">
+        <b id="sideName">旅行者</b>
+        <span id="sideRole">普通游客</span>
+        <span class="side-fav">★ 已收藏 <i id="favCount">0</i> 份内容</span>
+      </div>
+    </div>
+
+    <!-- 印章 + 回纹装饰 -->
+    <div class="side-deco">
+      <div class="seal">非遗伴游</div>
+    </div>
+    <div class="meander-band" aria-hidden="true"></div>
+  </aside>
+
+  <!-- ======== 右侧主内容区 ======== -->
+  <div class="main-wrap">
+    <header class="site-header">
+      <div class="header-slogan">
+        <span class="identity-chip" id="identityChip">🧳 旅行者视角</span>
+        <span class="slogan-dot"></span>
+        <span id="sloganChips" class="slogan-chips"></span>
+      </div>
+      <div id="sysStatus" class="sys-status">检测系统状态…</div>
+    </header>
+
+    <main>
+      <!-- 智能对话 -->
+      <section class="panel active" id="panel-chat" data-mode="tourist">
+        <div class="panel-head">
+          <h2>自然语言对话 · 多智能体协同</h2>
+          <p>自由提问，系统自动调度对应智能体；下方实时展示"调度 → 意图识别 → Agent 处理 → 结果"的协作链路（试一试：介绍一下广济桥 / 泉州乡村振兴数据怎么样 / 德化白瓷工坊怎么定价）</p>
+        </div>
+        <div class="orch-trace" id="orchTrace" hidden></div>
+        <div class="chat-box" id="chatBox"></div>
+        <form class="chat-input" id="chatForm">
+          <input id="chatInput" type="text" placeholder="输入问题，如：潮州工夫茶怎么体验？" autocomplete="off" />
+          <button type="submit">发送</button>
+        </form>
+      </section>
+
+      <!-- 行程规划 -->
+      <section class="panel" id="panel-plan" data-mode="tourist">
+        <div class="panel-head"><h2>智能行程生成</h2><p>输入出行条件，按你的个人画像生成已嵌入非遗体验点的每日行程</p></div>
+        <form id="planForm" class="card form-grid">
+          <label>目的地
+            <select id="planCity"></select>
+          </label>
+          <label>出行天数
+            <input id="planDays" type="number" min="1" max="7" value="2" />
+          </label>
+          <label>出行人群
+            <select id="planCrowd">
+              <option value="youth">青年</option>
+              <option value="family">亲子</option>
+              <option value="elder">老年</option>
+            </select>
+          </label>
+          <label>线路模式
+            <select id="planMode">
+              <option value="city">城市经典</option>
+              <option value="blend">城乡融合（城市+乡村）</option>
+              <option value="rural">乡村深度（振兴村/工坊/农事）</option>
+            </select>
+          </label>
+          <label class="check-line">
+            <input id="planHeritage" type="checkbox" checked /> 优先嵌入非遗体验点
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="primary">生成行程</button>
+            <button type="button" id="planRegen">一键重新生成</button>
+            <button type="button" class="ghost" data-copy-target="planResult">复制全部行程</button>
+            <button type="button" class="ghost" data-collect-target="planResult" data-collect-title="行程规划" data-collect-mode="tourist">☆ 收藏</button>
+          </div>
+        </form>
+        <div id="planResult" class="result"></div>
+      </section>
+
+      <!-- 讲解 -->
+      <section class="panel" id="panel-guide" data-mode="tourist">
+        <div class="panel-head"><h2>文旅-非遗联合讲解</h2><p>输入景点名称，获取"景点历史 + 关联非遗背景"两层解说</p></div>
+        <form id="guideForm" class="card form-grid">
+          <label>目的地<select id="guideCity"></select></label>
+          <label>景点名称
+            <input id="guideAttraction" list="attractionList" placeholder="如：广济桥 / 蟳埔渔村" />
+            <datalist id="attractionList"></datalist>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="primary">开始讲解</button>
+            <button type="button" class="ghost" data-copy-target="guideResult">复制讲解</button>
+            <button type="button" class="ghost" data-collect-target="guideResult" data-collect-title="景点讲解" data-collect-mode="tourist">☆ 收藏</button>
+          </div>
+        </form>
+        <div id="guideResult" class="result"></div>
+      </section>
+
+      <!-- 美食民俗 -->
+      <section class="panel" id="panel-food" data-mode="tourist">
+        <div class="panel-head"><h2>美食民俗推荐</h2><p>地道美食 + 饮食类非遗背景 + 民俗活动提示</p></div>
+        <form id="foodForm" class="card form-grid">
+          <label>目的地<select id="foodCity"></select></label>
+          <div class="form-actions">
+            <button type="submit" class="primary">获取推荐</button>
+            <button type="button" class="ghost" data-copy-target="foodResult">复制推荐</button>
+            <button type="button" class="ghost" data-collect-target="foodResult" data-collect-title="美食民俗" data-collect-mode="tourist">☆ 收藏</button>
+          </div>
+        </form>
+        <div id="foodResult" class="result"></div>
+      </section>
+
+      <!-- 非遗知识库 -->
+      <section class="panel" id="panel-kb" data-mode="tourist">
+        <div class="panel-head"><h2>非遗知识库检索</h2><p>优先读取本地知识库作答，减少大模型幻觉；点击项目可直接查询</p></div>
+        <form id="kbForm" class="card form-grid">
+          <label>目的地<select id="kbCity"></select></label>
+          <label>我的问题
+            <input id="kbQuestion" placeholder="如：南音在哪里可以看？铁观音制作技艺是什么级别？" />
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="primary">查询</button>
+            <button type="button" class="ghost" data-copy-target="kbResult">复制答案</button>
+            <button type="button" class="ghost" data-collect-target="kbResult" data-collect-title="非遗问答" data-collect-mode="tourist">☆ 收藏</button>
+          </div>
+        </form>
+        <div class="chip-row" id="kbChips"></div>
+        <div id="kbResult" class="result"></div>
+      </section>
+
+      <!-- AIGC -->
+      <section class="panel" id="panel-aigc" data-mode="tourist">
+        <div class="panel-head"><h2>AIGC 文创内容生成</h2><p>基于非遗项目生成小故事 / 宣传文案 / 文创构思</p></div>
+        <form id="aigcForm" class="card form-grid">
+          <label>目的地<select id="aigcCity"></select></label>
+          <label>非遗项目<select id="aigcHeritage"></select></label>
+          <label>生成类型
+            <select id="aigcType">
+              <option value="story">非遗趣味小故事</option>
+              <option value="copy">朋友圈宣传文案</option>
+              <option value="product">文创产品构思</option>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="primary">开始生成</button>
+            <button type="button" class="ghost" data-copy-target="aigcResult">复制内容</button>
+            <button type="button" class="ghost" data-collect-target="aigcResult" data-collect-title="AIGC文创" data-collect-mode="tourist">☆ 收藏</button>
+          </div>
+        </form>
+        <div id="aigcResult" class="result"></div>
+      </section>
+
+      <!-- 政务产业助手·智能对话（Agent 8，工作人员视图） -->
+      <section class="panel" id="panel-staffchat" data-mode="staff">
+        <div class="panel-head">
+          <h2>政务产业助手 · 智能对话</h2>
+          <p>面向地方工作人员的对话体：既能"提问"（指标排名 / 濒危预警 / 增收口径 / 工坊经营 / 地区对比），也能"总结归纳"——一键把分散数据整理成可直接进汇报材料的分层文本</p>
+        </div>
+
+        <div class="card scope-bar">
+          <label>数据范围（地区）
+            <select id="staffChatCity"></select>
+          </label>
+          <label>区县
+            <select id="staffChatCounty"><option value="">全部地区</option></select>
+          </label>
+          <span class="muted" id="staffChatScopeHint">按所选地区范围作答</span>
+        </div>
+
+        <div class="orch-trace" id="staffTrace" hidden></div>
+        <div class="chat-box" id="staffChatBox"></div>
+        <form class="chat-input" id="staffChatForm">
+          <input id="staffChatInput" type="text" placeholder="如：帮我总结一下苏州的非遗与产业情况" autocomplete="off" />
+          <button type="submit">发送</button>
+        </form>
+
+        <div class="chip-row" id="staffPrompts"></div>
+
+        <div class="card scope-bar" style="margin-top:14px">
+          <label class="grow">归纳总结对象（按上方地区的全部非遗与工坊数据生成）
+          </label>
+          <div class="form-actions">
+            <button type="button" class="primary" id="staffSummaryBtn">一键生成总结材料</button>
+            <button type="button" class="ghost" data-copy-target="staffSummaryOut">复制材料</button>
+            <button type="button" class="ghost" data-collect-target="staffSummaryOut" data-collect-title="工作总结材料" data-collect-mode="staff">☆ 收藏</button>
+          </div>
+        </div>
+        <div id="staffSummaryOut" class="result"></div>
+      </section>
+
+      <!-- 乡村产业赋能（Agent 6） -->
+      <section class="panel" id="panel-industry" data-mode="staff">
+        <div class="panel-head">
+          <h2>乡村产业赋能 · 非遗工坊经营助手</h2>
+          <p>面向传承人与乡村工坊：一键生成产品定位、三档定价、电商详情页文案、短视频脚本、包装升级与渠道对策，打通"体验引流 → 产地直邮"产销闭环</p>
+        </div>
+        <form id="industryForm" class="card form-grid">
+          <label>目的地<select id="industryCity"></select></label>
+          <label>非遗工坊<select id="industryWorkshop"></select></label>
+          <div class="form-actions">
+            <button type="submit" class="primary">生成赋能方案</button>
+            <button type="button" class="ghost" data-copy-target="industryResult">复制方案</button>
+            <button type="button" class="ghost" data-collect-target="industryResult" data-collect-title="工坊赋能方案" data-collect-mode="staff">☆ 收藏</button>
+          </div>
+        </form>
+        <div id="industryResult" class="result"></div>
+      </section>
+
+      <!-- 乡村振兴看板（Agent 7） -->
+      <section class="panel" id="panel-insight" data-mode="staff">
+        <div class="panel-head">
+          <h2>乡村振兴运营看板</h2>
+          <p>面向文旅部门与乡镇：非遗活态传承指数、增收测算、濒危预警与工坊对策——全部指标算法可解释、可复现；支持按地区（城市 / 区县）下钻，同一套算法出"全市"与"区县"两个口径</p>
+        </div>
+
+        <div class="card scope-bar">
+          <label>地区范围
+            <select id="insightCity"></select>
+          </label>
+          <label>区县
+            <select id="insightCounty"><option value="">全部地区</option></select>
+          </label>
+          <span class="muted" id="insightScopeHint">当前口径：全部地区</span>
+          <div class="form-actions">
+            <button type="button" class="primary" id="insightReload">切换并刷新看板</button>
+          </div>
+        </div>
+
+        <div id="insightResult" class="result"></div>
+        <form id="revenueForm" class="card form-grid" style="margin-top:14px">
+          <label>年游客量（人次）<input id="revVisitors" type="number" min="0" step="10000" placeholder="默认 500000" /></label>
+          <label>体验参与率（0-1）<input id="revExpRate" type="number" min="0" max="1" step="0.01" placeholder="默认 0.12" /></label>
+          <label>体验客单价（元）<input id="revTicket" type="number" min="0" step="10" placeholder="默认取工坊体验均价" /></label>
+          <label>好物转化率（0-1）<input id="revGoodsRate" type="number" min="0" max="1" step="0.01" placeholder="默认 0.25" /></label>
+          <label>好物客单价（元）<input id="revGoodsPrice" type="number" min="0" step="10" placeholder="默认取好物价格中位" /></label>
+          <div class="form-actions">
+            <button type="submit" class="primary">按参数重新测算</button>
+            <button type="button" class="ghost" data-collect-target="insightResult" data-collect-title="振兴看板" data-collect-mode="staff">☆ 收藏</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 个人中心（两种身份各有一套资料，界面随身份切换） -->
+      <section class="panel" id="panel-profile" data-mode="common">
+        <div class="panel-head"><h2>个人中心</h2><p>维护当前身份的画像资料（智能体据此定制内容），集中管理收藏内容——数据仅保存在本机浏览器，不上传服务器</p></div>
+        <div class="profile-grid">
+          <div class="profile-col">
+            <!-- 旅行者资料 -->
+            <div class="card profile-card" id="profCardTourist">
+              <div class="card-mode-badge">🧳 旅行者画像</div>
+              <div class="avatar-ring"><div class="avatar" id="profAvatar">客</div></div>
+              <label>昵称<input id="profName" maxlength="12" placeholder="旅行者" /></label>
+              <label>我的身份
+                <select id="profRole">
+                  <option value="普通游客">普通游客</option>
+                  <option value="非遗爱好者">非遗爱好者</option>
+                  <option value="研学团队">研学团队</option>
+                  <option value="亲子家庭">亲子家庭</option>
+                </select>
+              </label>
+              <label>常驻 / 关注目的地<select id="profCity"></select></label>
+              <label>出行偏好<input id="profPref" maxlength="30" placeholder="如：亲子游 · 爱手作体验" /></label>
+              <div class="form-actions">
+                <button type="button" class="primary" id="profSave">保存画像</button>
+                <button type="button" class="ghost" id="profReset">恢复默认</button>
+              </div>
+              <p class="muted" style="margin-top:10px">画像用途：行程规划结果将标注"已按你的画像定制"；生成的非遗好物与文创内容会据偏好推荐。</p>
+            </div>
+
+            <!-- 地方工作人员资料 -->
+            <div class="card profile-card" id="profCardStaff">
+              <div class="card-mode-badge staff">🏛 工作人员资料</div>
+              <div class="avatar-ring"><div class="avatar staff" id="profStaffAvatar">政</div></div>
+              <label>姓名<input id="profStaffName" maxlength="12" placeholder="工作人员" /></label>
+              <label>所属单位<input id="profStaffDept" maxlength="24" placeholder="如：潮州市潮安区文化广电旅游体育局" /></label>
+              <label>关注区县<select id="profStaffCity"></select></label>
+              <label>关注重点
+                <select id="profStaffFocus">
+                  <option value="非遗工坊增收">非遗工坊增收</option>
+                  <option value="濒危项目抢救">濒危项目抢救</option>
+                  <option value="乡村文旅引流">乡村文旅引流</option>
+                  <option value="好物产销对接">好物产销对接</option>
+                  <option value="传承人培育">传承人培育</option>
+                </select>
+              </label>
+              <div class="form-actions">
+                <button type="button" class="primary" id="profStaffSave">保存资料</button>
+                <button type="button" class="ghost" id="profStaffReset">恢复默认</button>
+              </div>
+              <p class="muted" style="margin-top:10px">资料用途：乡村振兴看板与工坊赋能方案将按"关注区县 / 关注重点"优先呈现（如濒危预警、增收测算口径）。</p>
+            </div>
+          </div>
+
+          <div class="card fav-card">
+            <h3>★ 我的收藏 <span class="muted" id="favScopeHint">（当前身份：旅行者）</span></h3>
+            <div id="favList" class="fav-list"></div>
+            <div class="form-actions" style="margin-top:12px">
+              <button type="button" class="ghost" id="favClear">清空当前身份收藏</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-meander" aria-hidden="true"></div>
+      <p>非遗伴游 HeritageTravel Agents · 三端闭环（游客游非遗 / 工坊增收入 / 政府看数据）· 知识库资料整理自中国非物质文化遗产网、潮州市及潮安区人民政府门户网站、泉州市文旅局等公开资料 · AIGC 内容由大模型生成，仅供参考</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
