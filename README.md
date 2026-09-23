@@ -81,28 +81,38 @@ LLM_MODEL=deepseek-chat
 
 ```
 VORTEX/
-├── public/                     前端（原生 HTML/CSS/JS，无需构建）
-│   ├── index.html              六个功能页
-│   ├── style.css               中式视觉样式
-│   └── app.js                  接口调用与结果渲染
+├── public/                     前端（原生 HTML/CSS/JS，无需构建、零框架依赖）
+│   ├── index.html              双身份工作台（旅行者 / 地方工作人员）九个功能页
+│   ├── style.css               中式视觉样式（含零依赖 CSS 看板图表）
+│   └── app.js                  接口调用、SSE 协作链路与结果渲染
 ├── server/                     后端（Node.js + Express）
 │   ├── package.json
 │   ├── .env.example            环境变量占位（真实 .env 不入库）
 │   └── src/
 │       ├── server.js           入口：中间件、静态资源、优雅停机
-│       ├── routes.js           接口层（控制器，不含业务逻辑）
+│       ├── routes.js           接口层（控制器，含 SSE 流式端点）
 │       ├── config.js           集中配置与启动校验
 │       ├── logger.js           结构化 JSON 日志
 │       ├── errors.js           类型化错误体系 + 全局错误处理
-│       ├── data/heritage.js    非遗-文旅知识库（数据层，可扩展城市）
-│       └── agents/             五大智能体 + 调度器 + LLM 接入层
-│           ├── orchestrator.js ├── planner.js ├── guide.js
-│           ├── food.js         ├── knowledge.js ├── aigc.js
-│           └── llm.js
+│       ├── data/               数据层（新增城市只需改这四张表）
+│       │   ├── heritage.js     非遗/景点/美食/民俗 + 关联关系
+│       │   ├── rural.js        乡村点位/非遗工坊/好物/农事/村宿
+│       │   ├── regions.js      非遗与点位的区县归属（下钻口径）
+│       │   ├── cities.meta.js  城市元信息与别名（自然语言识别用）
+│       │   └── registry.js     统一数据入口（断言/别名/多城检测/完整性审计）
+│       └── agents/             八大智能体 + 调度器 + LLM 接入层
+│           ├── orchestrator.js 调度器：意图路由 + 跨 Agent 协同
+│           ├── planner.js      ├── guide.js      ├── food.js
+│           ├── knowledge.js    ├── aigc.js
+│           ├── industry.js     乡村产业赋能（工坊端）
+│           ├── insight.js      乡村振兴运营洞察（政府端）
+│           ├── advisor.js      政务产业对话体（政府端）
+│           └── llm.js          大模型接入层（可选增强，失败静默降级）
 ├── scripts/
-│   ├── smoke-test.js           端到端冒烟测试（13 项断言）
+│   ├── smoke-test.js           端到端冒烟测试（42 项断言）
+│   ├── validate-data.js        数据完整性与城市别名识别自检
 │   └── md-to-pdf.py            交付文档 Markdown→PDF 排版
-└── docs/                       全套交付文档（含 PDF）
+└── docs/                       全套交付文档 01-07（md + PDF）与 15 张运行截图
 ```
 
 ## 五、接口一览
@@ -110,17 +120,24 @@ VORTEX/
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | /healthz · /readyz | 探活与就绪检查（供部署平台使用） |
-| GET | /api/health · /api/ready | 服务信息与运行模式 |
+| GET | /api/health · /api/ready | 服务信息与运行模式（含知识库城市/区县数与智能体清单） |
 | GET | /api/cities | 城市、景点、非遗清单（前端联动数据源） |
-| POST | /api/plan | Agent 1 行程规划 |
+| GET | /api/regions | 城市与区县归属、别名（看板与对话体的地区选择器数据源） |
+| POST | /api/plan | Agent 1 行程规划（city / blend / rural 三种线路模式） |
 | POST | /api/guide | Agent 2 景点-非遗讲解 |
 | POST | /api/food | Agent 3 美食民俗推荐 |
 | GET | /api/heritage/list | 非遗清单 |
 | POST | /api/heritage/query | Agent 4 非遗知识问答 |
 | POST | /api/aigc | Agent 5 AIGC 文创生成 |
+| GET / POST | /api/rural/workshops | 非遗工坊清单 |
+| POST | /api/rural/empower | Agent 6 乡村产业赋能方案 |
+| GET / POST | /api/insight | Agent 7 乡村振兴看板（支持 cityId + county 两级下钻） |
+| POST | /api/advisor/ask | Agent 8 政务产业对话体问答（支持 focus 关注点、多城对比） |
+| POST | /api/advisor/summary | Agent 8 一键生成分层汇报材料 |
 | POST | /api/chat | 调度器自然语言对话 |
+| GET | /api/orchestrate/stream · /api/advisor/stream | SSE 多智能体协作链路流式推送（按 audience 分流游客/工作人员） |
 
-统一响应：成功 `{ ok: true, data }`；失败 `{ ok: false, code, message }`。
+统一响应：成功 `{ ok: true, data }`；失败 `{ ok: false, code, message }`。非法城市 / 区县 / 工坊 / 生成类型一律返回 400，并给出规范化提示。
 
 ## 六、测试
 
@@ -150,9 +167,17 @@ node scripts/validate-data.js         # 数据完整性与城市别名识别自�
 
 ## 八、扩展新城市（数据驱动，无需改代码）
 
-编辑 `server/src/data/heritage.js`，按既有结构追加一个城市对象：
+新增一座城市只需补齐**四张数据表**，前端下拉、知识库检索、行程规划、看板下钻与政务问答会自动跟随生效：
+
+| 文件 | 需要填写的内容 |
+| --- | --- |
+| `server/src/data/heritage.js` | 非遗项目（含级别/类别/传承人/体验点位）、城市景点、美食、民俗，以及"景点 ↔ 非遗"关联 |
+| `server/src/data/rural.js` | 乡村点位、非遗工坊、乡村好物、农事体验、村宿，以及带来源标注的公开统计数据 |
+| `server/src/data/regions.js` | 每个非遗项目与乡村点位归属的区县（看板下钻口径） |
+| `server/src/data/cities.meta.js` | 省份、城市别名（古称 / 地标 / 下辖区县，用于自然语言识别） |
 
 ```js
+// heritage.js 追加一个城市对象（其余三张表同构追加）
 cities: {
   yourcity: {
     id: 'yourcity', name: '城市名', tagline: '…', intro: '…',
@@ -164,7 +189,13 @@ cities: {
 }
 ```
 
-前端下拉、知识库检索、行程规划与非遗传关联会自动生效。
+补完后先跑数据自检，确认结构完整、别名可被识别：
+
+```bash
+node scripts/validate-data.js
+```
+
+字段规范、常见坑与验收清单详见 **docs/07-新增城市扩展指南**。
 
 ## 九、交付文档（docs/）
 
