@@ -1,0 +1,12 @@
+# 统一换行符，避免"Windows 上写、Linux 上跑不起来"的坑
+#
+# deploy/ 下的脚本与配置都是给 Linux 服务器用的，必须是 LF 换行。
+# 若被转成 CRLF，会报 "bad interpreter: ...^M: no such file or directory"。
+*.sh      text eol=lf
+*.service text eol=lf
+*.conf    text eol=lf
+
+# 二进制资源不做换行符转换
+*.png binary
+*.jpg binary
+*.pdf binary

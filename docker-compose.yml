@@ -1,0 +1,44 @@
+# 非遗伴游 HeritageTravel Agents —— Docker Compose 生产编排
+#
+# 常用命令（在项目根目录执行）：
+#   docker compose up -d --build      # 构建并后台启动
+#   docker compose logs -f            # 实时日志
+#   docker compose restart            # 改完 server/.env 后重启
+#   docker compose down               # 停止并删除容器
+#   docker compose ps                 # 查看状态（含健康检查结果）
+#
+# 前置：项目根目录下需存在 server/.env（可由 server/.env.example 复制而来）。
+#       部署脚本 deploy/deploy.sh --docker 会自动补上这一步。
+
+services:
+  heritage:
+    build: .
+    image: feiyi-banyou:1.0.0
+    container_name: feiyi-banyou
+    restart: unless-stopped
+
+    # 对外端口：左边可改（例如备案后走 80 则写 "80:3000"），右边须与容器内 PORT 一致
+    ports:
+      - "3000:3000"
+
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+
+    # 大模型密钥等敏感配置从 server/.env 注入，不打进镜像
+    env_file:
+      - server/.env
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # 限制日志体积，避免长期运行把磁盘写满
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,18 @@
+# 构建镜像时排除的内容（减小体积、避免把密钥和本地产物打进镜像）
+node_modules
+**/node_modules
+.git
+.gitignore
+logs
+docs
+deploy
+scripts
+tmp-*
+*.log
+*.pdf
+
+# 关键：环境变量文件绝不进镜像（含 API Key），运行期通过 --env-file / compose env_file 注入
+server/.env
+server/.env.local
+.env
+.env.*.local

@@ -121,7 +121,13 @@ VORTEX/
 │   ├── smoke-test.js           端到端冒烟测试（42 项断言）
 │   ├── validate-data.js        数据完整性与城市别名识别自检
 │   └── md-to-pdf.py            交付文档 Markdown→PDF 排版
-└── docs/                       全套交付文档 01-08（md + PDF）与 15 张运行截图
+├── deploy/                     公网部署（一键脚本 + systemd 单元 + Nginx 反代）
+│   ├── deploy.sh               PM2 / systemd / Docker 三选一；自动装 Node、装依赖、放行端口
+│   ├── heritage-travel.service systemd 服务单元（专用系统用户 + 安全加固）
+│   └── nginx-feiyi-banyou.conf Nginx 反向代理（SSE 不缓冲、长超时、含 HTTPS 示例）
+├── Dockerfile · docker-compose.yml · .dockerignore   容器化部署（密钥不打进镜像）
+├── ecosystem.config.js         PM2 进程配置（开机自启、日志、内存重启阈值）
+└── docs/                       全套交付文档 01-09（md + PDF）与 15 张运行截图
 ```
 
 ## 五、接口一览
@@ -168,13 +174,25 @@ node scripts/smoke-test.js http://your-host:3000
 node scripts/validate-data.js         # 数据完整性与城市别名识别自检
 ```
 
-## 七、公网部署
+## 七、公网部署（阿里云轻量应用服务器）
 
-1. 服务器安装 Node.js 18+，上传源码；
-2. `cd server && npm install --omit=dev`，配置 `.env`；
-3. 使用 PM2 托管：`pm2 start src/server.js --name heritage-travel`，`pm2 save && pm2 startup`；
-4. Nginx 反向代理 80/443 到 3000 端口，配置域名与 HTTPS 证书；
-5. 验证 `https://你的域名/healthz` 返回 `{"ok":true}` 即部署成功。
+完整步骤、防火墙放行与故障排查见 **[`docs/09-公网部署指南.md`](docs/09-公网部署指南.md)**。最简路径：
+
+```bash
+# 1) 把代码放到服务器（服务器不能 git clone 部署文件，用 scp 整包传输；或自行上传）
+# 2) 在服务器项目根目录执行：
+sudo bash deploy/deploy.sh          # 默认 PM2 常驻；可加 --systemd 或 --docker
+```
+
+脚本自动完成：装 Node 20 → 部署到 `/opt/feiyi-banyou` → 装依赖 → 生成最小 `server/.env` → 放行 ufw 端口 → 启动并配置开机自启 → 打印访问地址与验证清单。
+
+**三个关键提醒**：
+
+1. **必须**在阿里云控制台「实例详情 → 防火墙」放行 TCP `3000`。云防火墙与系统 `ufw` 是两件事，漏做公网必然打不开；
+2. 用 `http://公网IP:3000` 访问**不需要 ICP 备案**；改用域名走 80/443 则必须完成备案；
+3. 校园网关 `myai.bupt.edu.cn` 解析到内网地址 `10.3.19.2`，**公网不可达**。未配置公网 API 时系统会自动降级为离线模板模式（功能完整、不会报错）；要展示真实大模型能力，把 `server/.env` 里的大模型三行指向公网接口（如阿里云百炼）后重启即可，**代码零改动**。
+
+已备好的部署文件见第四节项目结构中的 `deploy/`、`Dockerfile`、`docker-compose.yml`、`ecosystem.config.js`。
 
 > 注意：不可仅部署在校园内网，需保证公网可访问（大赛硬性要求）。
 
@@ -223,6 +241,7 @@ node scripts/validate-data.js
 | 07-新增城市扩展指南（.md/.pdf） | 数据驱动扩展的四张数据表规范、自检与验收清单 |
 | 08-冒烟回归测试记录（.md/.pdf） | 接入大模型模式下的 42 项冒烟回归记录（用例明细、覆盖范围、重点验证） |
 | 08-冒烟回归原始日志（.txt） | 该次回归的完整原始输出，可逐条核对 |
+| 09-公网部署指南（.md） | 阿里云轻量应用服务器公网上线：一键部署脚本、防火墙放行、故障排查、接入公网大模型 |
 | screenshots/ | 15 张真实运行截图（无头浏览器自动截取） |
 
 ## 十、许可证与声明

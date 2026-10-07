@@ -1,0 +1,44 @@
+[Unit]
+Description=非遗伴游 HeritageTravel Agents（多智能体文旅非遗导览服务）
+Documentation=https://github.com/G-xl23/feiyi-banyou
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# 部署路径由 deploy/deploy.sh --systemd 保证为该目录；手工安装请一并修改
+WorkingDirectory=/opt/feiyi-banyou
+
+# 运行用户（deploy.sh 会创建该系统用户）；手工安装请先执行：
+#   useradd --system --shell /usr/sbin/nologin --home /opt/feiyi-banyou heritage
+#   chown -R heritage:heritage /opt/feiyi-banyou
+User=heritage
+Group=heritage
+
+# 端口与运行模式；大模型相关配置由 /opt/feiyi-banyou/server/.env 自动加载
+Environment=NODE_ENV=production
+Environment=PORT=3000
+
+# 手工安装时若 node 不在 /usr/bin/node，请改成 `which node` 的结果
+ExecStart=/usr/bin/node server/src/server.js
+
+# 退出（含崩溃、被 OOM 杀掉）后 3 秒自动拉起；服务本身也实现了 SIGTERM 优雅停机
+Restart=always
+RestartSec=3
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=feiyi-banyou
+
+# —— 安全加固（应用不需要写系统目录、不需要提权）——
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
