@@ -93,16 +93,19 @@ function query(cityId, question) {
     });
   }
 
-  // 未命中知识库 → LLM 受限作答（仅基于全部库内上下文）或明确拒答
-  const kbContext = city.heritages.map((x) => x.name + '：' + x.summary).join('\n');
+  // 未命中知识库 → LLM 直接作答（知识库清单作为参考，非遗事实以库内为准）
+  const kbContext = city.heritages.map((x) => x.name + '（' + x.level + '）：' + x.summary).join('\n');
   return llm.chat([
-    { role: 'system', content: '你是非遗咨询助手。只能依据下面提供的本地知识库内容回答；知识库没有的信息一律回答"本地知识库暂未收录，建议查询中国非物质文化遗产网(www.ihchina.cn)"。不要编造。' },
-    { role: 'user', content: '本地知识库：\n' + kbContext + '\n\n用户问题：' + q }
-  ], { temperature: 0.4, maxTokens: 400 }).then((text) => ({
+    { role: 'system', content: '你是非遗文旅咨询助手。回答策略：1) 通用问题可直接用你自己的知识回答，不要拿"未收录"当挡箭牌；2) 涉及本地知识库已收录非遗的级别、传承人、点位、统计数字时，以知识库内容为准，没有的细节坦承"以官方公布为准"；3) 用简体中文，回答自然、控制在 300 字以内。' },
+    { role: 'user', content: '本地知识库（供参考）：\n' + kbContext + '\n\n用户问题：' + q }
+  ], { temperature: 0.6, maxTokens: 400 }).then((text) => ({
     source: text ? 'llm-with-kb-context' : 'none',
     city: city.name,
     matched: null,
-    answer: text || ('本地知识库暂未收录与「' + q + '」直接对应的资料。目前知识库覆盖：' + city.heritages.map((x) => x.name).join('、') + '。你可以任选一项继续提问。'),
+    answer: text
+      ? text + '\n\n—— 本回答由 ' + llm.modelLabel() + ' 生成；涉及非遗名录与统计数据时以本地知识库及官方公布为准。'
+      : ('本地知识库暂未收录与「' + q + '」直接对应的资料。目前知识库覆盖：' + city.heritages.map((x) => x.name).join('、') + '。你可以任选一项继续提问。'),
+    generatedBy: text ? llm.modelLabel() : undefined,
     related: city.heritages.slice(0, 4).map((x) => x.name)
   }));
 }

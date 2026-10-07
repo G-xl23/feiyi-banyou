@@ -19,6 +19,8 @@ const aigc = require('./aigc');
 const industry = require('./industry');
 const insight = require('./insight');
 const advisor = require('./advisor');
+const chatLlm = require('./chat-llm');
+const llm = require('./llm');
 const registry = require('../data/registry');
 const db = require('../data/heritage');
 
@@ -102,12 +104,22 @@ function route(question, opts) {
   const q = String(question || '').trim();
   if (!q) return Promise.reject(Object.assign(new Error('请输入内容'), { statusCode: 400, code: 'BAD_REQUEST' }));
 
-  // 工作人员侧：统一交给政务产业助手（内部再按意图细分）
+  // 工作人员侧：统一交给政务产业助手（内部再按意图细分）；
+  // 大模型可用时由 LLM 接管对话表达——以规则 Agent 的确定性答案为事实底稿改写，
+  // 保留全部确定性字段（revenue/intent 等）供前端与核查使用；LLM 失败则原样回落。
   if (options.audience === 'staff') {
     return advisor.ask(q, {
       cityId: registry.detectCity(q) || options.cityId,
       county: options.county,
       focus: options.focus
+    }).then((res) => {
+      if (!llm.isAvailable() || !(res.data && res.data.answer)) return res;
+      return chatLlm.compose(q, {
+        audience: 'staff',
+        facts: res.data.answer,
+        agentName: res.agent,
+        baseData: res.data
+      }).then((r) => r || res);
     });
   }
 
@@ -152,8 +164,17 @@ function route(question, opts) {
       return knowledge.query(cityId, q).then((data) => ({ agent: AGENT_NAMES.knowledge, data }));
   }
 
-  // 3) 默认走知识库 Agent
-  return knowledge.query(cityId, q).then((data) => ({ agent: AGENT_NAMES.knowledge, data }));
+  // 3) 默认走知识库 Agent；大模型可用时由 LLM 接管自由问答（知识库事实锚定，失败回落）
+  const kbFallback = () => knowledge.query(cityId, q).then((data) => ({ agent: AGENT_NAMES.knowledge, data }));
+  if (llm.isAvailable()) {
+    return chatLlm.compose(q, {
+      audience: 'tourist',
+      cityId,
+      agentName: AGENT_NAMES.knowledge,
+      baseData: { city: registry.city(cityId) ? registry.city(cityId).name : cityId }
+    }).then((r) => r || kbFallback());
+  }
+  return kbFallback();
 }
 
 module.exports = { route, analyze, AGENT_NAMES, detectAttraction };

@@ -38,4 +38,14 @@ async function chat(messages, opts) {
   }
 }
 
-module.exports = { chat, isAvailable: () => config.llm.enabled };
+module.exports = {
+  chat,
+  isAvailable: () => config.llm.enabled,
+  /** 对外标注：所使用的模型名称与接入网关（大赛要求标明 AI 大模型名称及版本号） */
+  modelLabel: () => {
+    if (!config.llm.enabled) return '';
+    let host = '';
+    try { host = new URL(config.llm.baseUrl).host; } catch (_) { /* 忽略 */ }
+    return config.llm.model + (host ? '（' + host + '）' : '');
+  }
+};

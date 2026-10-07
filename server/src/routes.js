@@ -43,6 +43,7 @@ router.get('/ready', (_req, res) => {
     knowledgeCities: registry.cityIds(),
     knowledgeCounties: registry.cityIds().reduce((s, id) => s + registry.counties(id).length, 0),
     llmMode: llm.isAvailable() ? 'remote-llm' : 'offline-template',
+    llmModel: llm.isAvailable() ? llm.modelLabel() : null,
     agents: ['planner', 'guide', 'food', 'knowledge', 'aigc', 'industry', 'insight', 'advisor'],
     audiences: ['tourist', 'staff']
   });

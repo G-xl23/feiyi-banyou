@@ -4,17 +4,83 @@
  * 用法：node scripts/smoke-test.js [baseUrl]
  */
 const BASE = process.argv[2] || 'http://127.0.0.1:3000';
+const http = require('http');
+
+// 单次请求超时：接入大模型后部分应答需 10~30 秒，故给足余量（可用环境变量覆盖）
+const TIMEOUT_MS = Number(process.env.SMOKE_TIMEOUT_MS || 180000);
+// 传输层失败自动重试次数（仅重试网络错误，HTTP 状态码不重试）
+const RETRY = Number(process.env.SMOKE_RETRY || 2);
+// 失败用例清单（供验收报告定位）
+const failures = [];
+
+/**
+ * 极简 HTTP 客户端：禁用 keep-alive（agent:false）+ 显式超时。
+ * 串行冒烟中相邻用例间隔可达数十秒，复用连接池中的空闲连接易触发 undici 的
+ * "fetch failed"，故不依赖全局 fetch，改用 http.request 精确控制连接生命周期。
+ */
+function httpRequest(path, options, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(BASE + path);
+    const body = options && options.body;
+    const headers = Object.assign(
+      { 'Content-Type': 'application/json' },
+      (options && options.headers) || {},
+      body ? { 'Content-Length': Buffer.byteLength(body) } : {}
+    );
+    const req = http.request({
+      hostname: u.hostname,
+      port: u.port || 80,
+      path: u.pathname + u.search,
+      method: (options && options.method) || 'GET',
+      headers: headers,
+      agent: false,
+      timeout: timeoutMs
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          text: text,
+          json: () => JSON.parse(text)
+        });
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('请求超时（' + timeoutMs + 'ms）：' + path)));
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+/** 带重试的请求：只在传输层出错时重试，HTTP 返回码不重试 */
+async function request(path, options) {
+  let lastErr;
+  for (let i = 0; i <= RETRY; i++) {
+    try {
+      return await httpRequest(path, options, TIMEOUT_MS);
+    } catch (err) {
+      lastErr = err;
+      if (i < RETRY) await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
 
 async function call(name, path, options, expectFail) {
   try {
-    const res = await fetch(BASE + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, options || {}));
-    const body = await res.json();
+    const res = await request(path, options);
+    const body = res.json();
     const okExpected = expectFail ? !res.ok : (res.ok && body.ok !== false);
     const brief = JSON.stringify(body).slice(0, 260);
     console.log((okExpected ? 'PASS' : 'FAIL') + ' | ' + name + ' | HTTP ' + res.status + ' | ' + brief);
+    if (!okExpected) failures.push(name + '：HTTP ' + res.status);
     return okExpected;
   } catch (err) {
     console.log('ERROR | ' + name + ' | ' + err.message);
+    failures.push(name + '：' + err.message);
     return false;
   }
 }
@@ -22,14 +88,16 @@ async function call(name, path, options, expectFail) {
 // 断言式调用：既检查 HTTP 成功，也检查响应体满足自定义条件
 async function callWith(name, path, options, assert) {
   try {
-    const res = await fetch(BASE + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, options || {}));
-    const body = await res.json();
+    const res = await request(path, options);
+    const body = res.json();
     const detail = assert ? assert(body, res) : '';
     const okExpected = res.ok && body.ok !== false && !detail;
     console.log((okExpected ? 'PASS' : 'FAIL') + ' | ' + name + ' | HTTP ' + res.status + ' | ' + (detail || JSON.stringify(body).slice(0, 260)));
+    if (!okExpected) failures.push(name + '：' + (detail || 'HTTP ' + res.status + ' 判定失败'));
     return okExpected;
   } catch (err) {
     console.log('ERROR | ' + name + ' | ' + err.message);
+    failures.push(name + '：' + err.message);
     return false;
   }
 }
@@ -37,20 +105,30 @@ async function callWith(name, path, options, assert) {
 // SSE：读取完整事件流，验证 step 链路与 final 结果
 async function callSSE(name, message, extraQuery) {
   try {
-    const url = BASE + '/api/orchestrate/stream?message=' + encodeURIComponent(message) + (extraQuery || '');
-    const res = await fetch(url);
-    const text = await res.text();
+    const url = '/api/orchestrate/stream?message=' + encodeURIComponent(message) + (extraQuery || '');
+    const res = await request(url, {});
+    const text = res.text;
     const okExpected = res.ok && text.includes('event: step') && text.includes('event: final');
     console.log((okExpected ? 'PASS' : 'FAIL') + ' | ' + name + ' | HTTP ' + res.status + ' | ' + text.replace(/\n/g, ' ').slice(0, 240));
+    if (!okExpected) failures.push(name + '：SSE 事件序列不完整（HTTP ' + res.status + '）');
     return okExpected;
   } catch (err) {
     console.log('ERROR | ' + name + ' | ' + err.message);
+    failures.push(name + '：' + err.message);
     return false;
   }
 }
 
 (async function main() {
+  const startedAt = Date.now();
   const results = [];
+  // 运行时模式（用于验收记录：离线模板 / 远程大模型）
+  try {
+    const ready = (await request('/api/ready', {})).json();
+    console.log('运行模式：' + ready.llmMode + (ready.llmModel ? ' · ' + ready.llmModel : '') + '\n');
+  } catch (err) {
+    console.log('警告：无法读取 /api/ready（' + err.message + '）\n');
+  }
   results.push(await call('健康检查', '/healthz', {}));
   results.push(await callWith('就绪检查（含8个Agent / 3城）', '/api/ready', {}, (b) => {
     if (!b.agents || b.agents.length !== 8) return 'agents 数量应为 8，实际 ' + (b.agents || []).length;
@@ -166,7 +244,9 @@ async function callSSE(name, message, extraQuery) {
     method: 'POST', body: JSON.stringify({ message: '哪些非遗项目最需要抢救？', cityId: 'suzhou' })
   }, (b) => {
     const d = (b.data || {}).data || {};
-    return d.answer && d.answer.indexOf('濒危预警') >= 0 ? '' : '答复未包含预警清单';
+    // LLM 接管模式下 answer 为大模型改写稿，确定性原稿保留在 facts，二者取其一即可
+    const text = (d.answer || '') + ' ' + (d.facts || '');
+    return text.indexOf('濒危预警') >= 0 ? '' : '答复未包含预警清单';
   }));
   results.push(await callWith('Agent8 问答·增收测算口径', '/api/advisor/ask', {
     method: 'POST', body: JSON.stringify({ message: '苏州乡村文旅一年能增收多少？', cityId: 'suzhou' })
@@ -178,13 +258,15 @@ async function callSSE(name, message, extraQuery) {
     method: 'POST', body: JSON.stringify({ message: '泉州和苏州比怎么样？' })
   }, (b) => {
     const d = (b.data || {}).data || {};
-    return d.answer && d.answer.indexOf('横向对比') >= 0 ? '' : '未返回对比结论';
+    const text = (d.answer || '') + ' ' + (d.facts || '');
+    return text.indexOf('横向对比') >= 0 ? '' : '未返回对比结论';
   }));
   results.push(await callWith('Agent8 问答·工坊经营', '/api/advisor/ask', {
     method: 'POST', body: JSON.stringify({ message: '镇湖苏绣工坊怎么定价？' })
   }, (b) => {
     const d = (b.data || {}).data || {};
-    return d.answer && d.answer.indexOf('镇湖') >= 0 ? '' : '未命中该工坊';
+    const text = (d.answer || '') + ' ' + (d.facts || '');
+    return text.indexOf('镇湖') >= 0 ? '' : '未命中该工坊';
   }));
   results.push(await callWith('Agent8 兜底引导（无明确意图）', '/api/advisor/ask', {
     method: 'POST', body: JSON.stringify({ message: '你好', cityId: 'suzhou' })
@@ -233,6 +315,11 @@ async function callSSE(name, message, extraQuery) {
   }, true));
 
   const passed = results.filter(Boolean).length;
-  console.log('\n===== 冒烟测试结果：' + passed + '/' + results.length + ' 通过 =====');
+  const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+  console.log('\n===== 冒烟测试结果：' + passed + '/' + results.length + ' 通过（耗时 ' + seconds + ' 秒） =====');
+  if (failures.length) {
+    console.log('失败用例：');
+    failures.forEach((f) => console.log('  · ' + f));
+  }
   process.exit(passed === results.length ? 0 : 1);
 })();
